@@ -3,40 +3,34 @@ import { useState, useEffect } from "react";
 import { database } from "@/util/firebaseConfig";
 import { ref, onValue, set, serverTimestamp } from "firebase/database";
 import { QuizQuestion } from "@/types";
+import { useAuth } from "@/util/AuthContext";
+import Link from "next/link"; // Ensure Link is imported
 
 const SubmitAnswer = () => {
+  const { user: fbUser, loading } = useAuth();
+
   const [currentQuiz, setCurrentQuiz] = useState<QuizQuestion | null>(null);
   const [userAnswers, setUserAnswers] = useState<{ [key: string]: number }>({});
-  const [name, setName] = useState<string | null>(null);
-  const [user, setUser] = useState< string | null>(null);
   const [hasAnswered, setHasAnswered] = useState(false); 
 
-  // Function to safely sanitize the user name for Firebase keys
-  const getSanitizedUser = (username: string | null): string | null => {
-    return username ? username.replace(/[.#$[\]]/g, "_") : null;
+  // Function to get the unique Firebase User ID (UID)
+  const getUserId = (user: any): string | null => {
+    return user?.uid || null;
   }
+  
+  // Fetch the current quiz ID and quiz data, and check user's answer status
+  useEffect(() => {
+    if (loading) return; 
 
-  // NEW FUNCTION: Clear name and trigger rename flow
-  const handleRename = () => {
-    // 🚨 Safety Check: Prevent rename if the current quiz has been answered
-    if (hasAnswered) {
-        alert("You cannot change your name after submitting an answer for the current quiz. Wait for the next question to be active or clear.");
+    const userId = getUserId(fbUser);
+    
+    if (!fbUser) {
+        setCurrentQuiz(null);
+        setHasAnswered(false);
         return;
     }
-    
-    localStorage.removeItem("user");
-    setUser(null);
-    setName(null); // Clear the temporary name input state too
-    alert("You can now enter a new name.");
-  };
 
-  // Fetch the current quiz ID, quiz data, and check user's answer status
-  useEffect(() => {
     const eventControlRef = ref(database, "EventControl/currentQuizId");
-    const storedName = localStorage.getItem("user");
-    if (storedName) {
-      setUser(storedName);
-    }
     
     const unsubscribe = onValue(eventControlRef, (snapshot) => {
       const quizId = snapshot.val();
@@ -46,7 +40,6 @@ const SubmitAnswer = () => {
 
       if (quizId) {
         const quizRef = ref(database, `quiz/${quizId}`);
-        const sanitizedUser = getSanitizedUser(storedName);
         
         const quizUnsubscribe = onValue(quizRef, (quizSnapshot) => {
           if (quizSnapshot.exists()) {
@@ -56,8 +49,8 @@ const SubmitAnswer = () => {
             };
             setCurrentQuiz(fetchedQuiz as QuizQuestion);
             
-            if (sanitizedUser) {
-              const userAnswerRef = ref(database, `UserAnswers/${sanitizedUser}/${quizId}`);
+            if (userId) {
+              const userAnswerRef = ref(database, `UserAnswers/${userId}/${quizId}`);
               onValue(userAnswerRef, (answerSnapshot) => {
                 if (answerSnapshot.exists()) {
                   setHasAnswered(true);
@@ -78,7 +71,7 @@ const SubmitAnswer = () => {
       }
     });
     return () => unsubscribe();
-  }, []); 
+  }, [fbUser, loading]); 
 
   const handleAnswerChange = (quizId: string, selectedAnswerId: string) => {
     setUserAnswers((prevAnswers) => ({
@@ -88,10 +81,11 @@ const SubmitAnswer = () => {
   };
 
   const handleSubmit = (quizId: string) => {
-    if (!user) {
-      alert("Please enter your name before submitting an answer.");
+    if (!fbUser) {
+      alert("You must be logged in to submit an answer.");
       return;
     }
+    
     const answerId = userAnswers[quizId];
     if (answerId === undefined) {
       alert("Please select an answer.");
@@ -103,14 +97,15 @@ const SubmitAnswer = () => {
         return;
     }
 
-    const userEmail = getSanitizedUser(user);
-    if (!userEmail) return;
+    const userId = getUserId(fbUser);
+    if (!userId) return;
 
-    const answerRef = ref(database, `UserAnswers/${userEmail}/${quizId}`);
+    const answerRef = ref(database, `UserAnswers/${userId}/${quizId}`);
 
     try {
       set(answerRef, {
         answerId: answerId,
+        userName: fbUser.email, 
         timestamp: serverTimestamp(),
       });
       setHasAnswered(true); 
@@ -120,31 +115,19 @@ const SubmitAnswer = () => {
     }
   };
   
-  // --- Name Input Screen ---
-  if(!user){
+  // --- Render Logic ---
+  if (loading) {
+      return <div className="p-8 text-xl">Checking authentication...</div>;
+  }
+  
+  if (!fbUser) {
     return(
-      <div className="p-8">
-        <h2 className="text-2xl font-bold mb-4">Enter Your Name</h2>
-        <input 
-          type="text"
-          className="border p-2 rounded w-full mb-4"
-          placeholder="Your Name"
-          value={name || ""}
-          onChange={(e) => setName(e.target.value)}
-        />
-        <button
-          onClick={() => {
-            if(name && name.trim()){
-              localStorage.setItem("user", name.trim());
-              setUser(name.trim());
-            } else {
-                alert("Name cannot be empty.");
-            }
-          }}
-          className="bg-blue-600 text-white px-4 py-2 rounded"
-        >
-          Save Name
-        </button>
+      <div className="p-8 text-center">
+        <h2 className="text-2xl font-bold mb-4 text-red-600">Login Required</h2>
+        <p className="mb-4">You need to log in to submit answers. Go to the home page to log in with your provided credentials.</p>
+        <Link href="/" className="bg-blue-600 text-white px-4 py-2 rounded">
+            Go to Login
+        </Link>
       </div>
     )
   }
@@ -152,21 +135,18 @@ const SubmitAnswer = () => {
   // --- Quiz Display Screen ---
   return (
     <div className="p-8">
+      {/* 🚨 BACK BUTTON ADDED HERE */}
+      <Link 
+        href="/" 
+        className="inline-flex items-center text-blue-600 hover:text-blue-800 mb-6 text-sm font-medium"
+      >
+        &larr; Back to Home
+      </Link>
+      {/* End Back Button */}
+      
       <div className="flex justify-between items-center mb-6 border-b pb-3">
-          <h2 className="text-xl font-bold">Welcome, {user}!</h2>
-          {/* 🚨 RENAMING LOGIC: Button is disabled if hasAnswered is true */}
-          <button
-              onClick={handleRename}
-              className={`text-sm underline transition-opacity ${
-                  hasAnswered 
-                    ? 'text-gray-500 cursor-not-allowed opacity-70' 
-                    : 'text-blue-600 hover:text-blue-800'
-              }`}
-              disabled={hasAnswered}
-              title={hasAnswered ? "Please wait for the next quiz to change your name." : "Click to enter a new name."}
-          >
-              (Change Name)
-          </button>
+          <h2 className="text-xl font-bold">Current Quiz</h2>
+          <p className="text-sm text-gray-600">Playing as: <span className="font-semibold text-blue-600">{fbUser.email}</span></p>
       </div>
 
       {currentQuiz ? (
