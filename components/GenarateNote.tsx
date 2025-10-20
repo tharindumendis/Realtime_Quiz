@@ -102,7 +102,7 @@ const GenerateNote = () => {
             {note && (
                 <div className="mt-6 p-5 border-t-4 border-indigo-400 bg-indigo-50 rounded-lg">
                     <h4 className="text-lg font-semibold mb-2 flex justify-between items-center">
-                        Note on "{topic}"
+                        Note on &quot;{topic}&quot;
                         
                         {/* 🚨 DOWNLOAD BUTTON */}
                         <button

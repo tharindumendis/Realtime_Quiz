@@ -186,7 +186,7 @@ const AdminActionPanel = () => {
       </ul>
 
       {quizzes.length === 0 && (
-          <p className="text-gray-500 mt-4">No quizzes found. Add a quiz using the "Add Quiz" panel.</p>
+          <p className="text-gray-500 mt-4">No quizzes found. Add a quiz using the &quot;Add Quiz&quot; panel.</p>
       )}
 
       {showModal && currentQuiz && (

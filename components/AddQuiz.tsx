@@ -345,7 +345,6 @@ const AddQuiz = () => {
       question,
       answers,
       rightAnswer,
-      // @ts-ignore - serverTimestamp is a special Firebase value
       timestamp: serverTimestamp(), 
     };
     submitQuizToFirebase(newQuiz);
